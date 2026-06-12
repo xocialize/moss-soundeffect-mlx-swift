@@ -18,16 +18,19 @@ import XCTest
 @testable import MossSoundEffectMLX
 
 final class ParityTests: XCTestCase {
+    /// Root of the Python oracle repo (moss-soundeffect-mlx) — golden fixtures live there.
     static let repoRoot: URL = {
         if let env = ProcessInfo.processInfo.environment["MOSS_SFX_REPO"] {
             return URL(fileURLWithPath: env)
         }
-        // …/swift/Tests/MossSoundEffectMLXTests/ParityTests.swift -> repo root
+        // …/Tests/MossSoundEffectMLXTests/ParityTests.swift -> this repo root,
+        // then the sibling oracle repo (dev-machine layout).
         return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+            .appendingPathComponent("moss-soundeffect-mlx")
     }()
 
     static let weightsDir: URL = {
