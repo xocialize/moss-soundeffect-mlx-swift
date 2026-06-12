@@ -14,7 +14,7 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.25.0"),
         // Tokenization: MLXEngine has no internal tokenizer, so the Qwen3
         // tokenizer ships with this package via swift-transformers.
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "0.1.13"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
     ],
     targets: [
         .target(
