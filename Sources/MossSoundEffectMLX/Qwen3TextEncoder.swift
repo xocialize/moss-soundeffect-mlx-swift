@@ -168,6 +168,16 @@ public final class Qwen3TextEncoder: Module {
         eval(self)
     }
 
+    /// Release the encoder's parameter arrays back to MLX so its ~4 GB (fp32 Qwen3-1.7B shards)
+    /// stops occupying unified memory. The prompt is encoded ONCE up front, then this encoder is
+    /// idle through the whole 100-step CFG denoise + VAE decode — evicting it before the loop is the
+    /// Lens/Boogu encoder-evict pattern. `loadWeights(from:)` reloads it for the next request.
+    /// After this call the encoder is unusable until reloaded.
+    public func unloadWeights() {
+        apply(filter: Self.filterAll) { _ in MLXArray() }
+        MLX.Memory.clearCache()
+    }
+
     /// ids: (B, L) token ids -> (B, L, hidden) last-layer hidden states.
     /// Pad-position zeroing is the caller's job (mirrors WanPrompter).
     public func callAsFunction(_ ids: MLXArray) -> MLXArray {

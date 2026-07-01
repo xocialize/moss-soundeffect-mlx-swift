@@ -96,10 +96,20 @@ public final class MossSoundEffectPipeline {
     /// internal tokenizer. Optional so parity tests can inject golden contexts.
     public var prompter: WanPrompter?
 
-    public init(dit: WanAudioModel, vae: DAC, prompter: WanPrompter? = nil) {
+    /// The text_encoder snapshot dir + dtype, retained from `load(from:)` so the Qwen3 encoder can
+    /// be evicted after encoding and lazily reloaded on the next request (the encoder-evict lever;
+    /// see `generate(prompt:)`). `nil` when the pipeline was constructed directly (e.g. parity
+    /// tests that inject golden contexts) — eviction is then skipped, keeping that path unchanged.
+    private let textEncoderDirectory: URL?
+    private let textEncoderDType: DType
+
+    public init(dit: WanAudioModel, vae: DAC, prompter: WanPrompter? = nil,
+                textEncoderDirectory: URL? = nil, textEncoderDType: DType = .bfloat16) {
         self.dit = dit
         self.vae = vae
         self.prompter = prompter
+        self.textEncoderDirectory = textEncoderDirectory
+        self.textEncoderDType = textEncoderDType
         self.scheduler = FlowMatchScheduler(shift: 5.0, sigmaMin: 0.0, extraOneStep: true)
     }
 
@@ -144,7 +154,10 @@ public final class MossSoundEffectPipeline {
         let prompter = WanPrompter(tokenizer: tokenizer, textEncoder: textEncoder)
 
         eval(dit, vae, textEncoder)
-        return MossSoundEffectPipeline(dit: dit, vae: vae, prompter: prompter)
+        return MossSoundEffectPipeline(
+            dit: dit, vae: vae, prompter: prompter,
+            textEncoderDirectory: directory.appendingPathComponent("text_encoder"),
+            textEncoderDType: dtype)
     }
 
     /// Full text -> audio path, mirroring the Python facade: appends the
@@ -171,8 +184,22 @@ public final class MossSoundEffectPipeline {
         let fullPrompt = appendDurationSuffix
             ? "\(prompt.trimmingCharacters(in: .whitespacesAndNewlines)) duration: \(String(format: "%.1f", secondsRounded))s"
             : prompt
+
+        // Encoder-evict lever (contract 1.14): the Qwen3-1.7B text encoder (~4 GB fp32 shards)
+        // encodes the prompt ONCE here, then is idle through the 100-step CFG denoise + VAE decode.
+        // Reload it (it may have been evicted after the previous request), encode, force the two
+        // contexts to materialize, then release the encoder's ~4 GB before the loop so only the DiT
+        // + VAE stay resident through the denoise. `textEncoderDirectory == nil` (parity-test
+        // injection path) skips the reload/evict, leaving that path byte-identical.
+        if let dir = textEncoderDirectory {
+            try prompter.textEncoder.loadWeights(from: dir, dtype: textEncoderDType)
+        }
         let context = prompter.encodePrompt([fullPrompt])
         let contextNega = prompter.encodePrompt([negativePrompt])
+        if textEncoderDirectory != nil {
+            eval(context, contextNega)              // materialize before freeing the encoder weights
+            prompter.textEncoder.unloadWeights()    // release ~4 GB; reloaded on the next request
+        }
 
         let latentLength = sampleRate * maxInferenceSeconds / vae.config.hopLength
         MLXRandom.seed(seed)  // NB: not torch/python-RNG compatible
