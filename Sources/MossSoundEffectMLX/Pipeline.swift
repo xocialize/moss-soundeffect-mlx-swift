@@ -215,8 +215,10 @@ public final class MossSoundEffectPipeline {
 
     /// Denoise injected noise under injected (already-encoded) contexts and
     /// decode. Mirrors the oracle WanAudioPipeline.__call__ T2A path.
-    /// `onStep` fires before each denoise step — throw from it to abort
-    /// (cancellation yield point for engine-governed runs).
+    /// `onStep` fires before each denoise step AND once more (with index
+    /// `numInferenceSteps`) before the final VAE decode — throw from it to
+    /// abort (cancellation yield points for engine-governed runs; the
+    /// pre-decode fire is the CAN-gate decode seam).
     public func generate(
         context: MLXArray,
         contextNega: MLXArray,
@@ -245,6 +247,11 @@ public final class MossSoundEffectPipeline {
                 .asType(noise.dtype)
             eval(latents)  // keep command buffers bounded
         }
+
+        // Pre-decode cancellation seam (MLXEngine CAN gate): the 30 s fp32 VAE decode is one
+        // monolithic eval — bail here rather than paying for a decode whose result the
+        // cancelled caller will discard. Fired with index == step count (past the loop).
+        try onStep?(scheduler.timesteps.count)
 
         // Decode at fp32 (upstream decodes under fp32 autocast).
         let audio = vae.decode(latents.asType(.float32))
