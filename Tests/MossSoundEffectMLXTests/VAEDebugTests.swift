@@ -9,8 +9,8 @@ import XCTest
 @testable import MossSoundEffectMLX
 
 final class VAEDebugTests: XCTestCase {
+    override func invokeTest() { withMLXCPU { super.invokeTest() } }
     func testVAEDecodeStages() throws {
-        Device.setDefault(device: Device(.cpu))
         let fixtures = ParityTests.repoRoot
             .appendingPathComponent("tests/fixtures/vae_debug_stages.safetensors")
         let stages = try loadArrays(url: fixtures)

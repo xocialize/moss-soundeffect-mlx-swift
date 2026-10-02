@@ -8,8 +8,8 @@ import XCTest
 @testable import MossSoundEffectMLX
 
 final class TokenizerTests: XCTestCase {
+    override func invokeTest() { withMLXCPU { super.invokeTest() } }
     func testTokenizerMatchesGoldenIds() async throws {
-        Device.setDefault(device: Device(.cpu))
         let goldens = try loadArrays(
             url: ParityTests.repoRoot.appendingPathComponent(
                 "tests/fixtures/swift_goldens.safetensors"))

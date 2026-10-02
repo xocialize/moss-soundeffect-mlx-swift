@@ -18,6 +18,7 @@ import XCTest
 @testable import MossSoundEffectMLX
 
 final class ParityTests: XCTestCase {
+    override func invokeTest() { withMLXCPU { super.invokeTest() } }
     /// Root of the Python oracle repo (moss-soundeffect-mlx) — golden fixtures live there.
     static let repoRoot: URL = {
         if let env = ProcessInfo.processInfo.environment["MOSS_SFX_REPO"] {
@@ -44,7 +45,6 @@ final class ParityTests: XCTestCase {
 
     override class func setUp() {
         super.setUp()
-        Device.setDefault(device: Device(.cpu))
         let url = repoRoot
             .appendingPathComponent("tests/fixtures/swift_goldens.safetensors")
         // loadArrays is LAZY and mmap-backed: rewriting this file while tests
